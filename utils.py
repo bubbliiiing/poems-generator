@@ -25,13 +25,12 @@ def load(poetry_file):
     words = []
     for poetry in poetrys:
         words += [word for word in poetry]
-    counter = collections.Counter(words)
-    
-    count_pairs = sorted(counter.items(), key=lambda x: -x[1])
     # 获得所有字，出现次数从大到小排列
-
+    counter = collections.Counter(words)
+    count_pairs = sorted(counter.items(), key=lambda x: -x[1])
     words, _ = zip(*count_pairs)
-    # 取出现频率最高的词的数量组成字典，不在字典中的字用'*'代替
+
+    # 取出频率高的字组成字典，频率不高的字利用" "代替
     words_size = min(max_words, len(words))
     words = words[:words_size] + (UNKNOWN_CHAR,)
     # 计算总长度
@@ -49,6 +48,7 @@ def load(poetry_file):
     return np.array(poetrys_vector),char2id_dict,id2char_dict
 
 def get_6to1(x_data,char2id_dict):
+    # 读取出每一首诗中，所有6个字到它后一个字的对应
     inputs = []
     targets = []
     for index in range(len(x_data)):
@@ -71,24 +71,25 @@ def get_batch(batch_size,x_data,char2id_dict,id2char_dict):
     while(True):
         one_hot_x_data = []
         one_hot_y_data = []
+        # 对batch_size首诗进行6to1的操作
         for i in range(batch_size):
             batch_i = (batch_i+1)%n
             inputs,targets = get_6to1(x_data[batch_i],char2id_dict)
             for j in range(len(inputs)):
                 one_hot_x_data.append(inputs[j])
                 one_hot_y_data.append(targets[j])
-            
+
         batch_size_after = len(one_hot_x_data)
+        # 将6to1的结果变化为6to1的形式
         input_data = np.zeros(
             (batch_size_after, unit_sentence, words_size))
         target_data = np.zeros(
             (batch_size_after, words_size))
         for i, (input_text, target_text) in enumerate(zip(one_hot_x_data, one_hot_y_data)):
-            # 为末尾加上" "空格
+            # 将输入的每一个step对应的字的id对应的那个位置设置为1
             for t, index in enumerate(input_text):
                 input_data[i, t, index] = 1
-            
-            # 相当于前一个内容的识别结果，作为输入，传入到解码网络中
+            # 将输出的字的id对应的那个位置设置为1
             target_data[i, target_text] = 1.
         yield input_data,target_data
 
@@ -96,9 +97,11 @@ def predict_from_nothing(epoch,x_data,char2id_dict,id2char_dict,model):
     # 训练过程中，每1个epoch打印出当前的学习情况
     print("\n#-----------------------Epoch {}-----------------------#".format(epoch))
     words_size = len(id2char_dict)
-    
+
+    # 随机取一首诗的开头6个字符，进行后面的预测
     index = np.random.randint(0, len(x_data))
     sentence = x_data[index][:unit_sentence]
+
     def _pred(text):
         temp = text[-unit_sentence:]
         x_pred = np.zeros((1, unit_sentence, words_size))
@@ -110,7 +113,7 @@ def predict_from_nothing(epoch,x_data,char2id_dict,id2char_dict,model):
             while id2char_dict[choice_id[0]] in ['，','。',' ']:
                 choice_id = np.random.randint(0,len(char2id_dict),1)
         return choice_id
-
+    # 一个字一个字的往后预测
     for i in range(24-unit_sentence):
         pred = _pred(sentence)
         sentence = np.append(sentence,pred)
@@ -119,7 +122,7 @@ def predict_from_nothing(epoch,x_data,char2id_dict,id2char_dict,model):
         output = output + id2char_dict[sentence[i]]
     print(output)
 
-def predict_from_head(epoch,name,x_data,char2id_dict,id2char_dict,model):
+def predict_from_head(name,x_data,char2id_dict,id2char_dict,model):
     # 根据给定的字，生成藏头诗
     if len(name) < 4:
         for i in range(4-len(name)):
@@ -157,10 +160,12 @@ def predict_from_head(epoch,name,x_data,char2id_dict,id2char_dict,model):
                 choice_id = np.random.randint(0,len(char2id_dict),1)
         return choice_id
 
+    # 首先预测出包含藏头诗第一个字的诗的前六个字
     for i in range(5):
         pred = _pred(sentence)
         sentence = np.append(sentence,pred)
 
+    # 然后利用这六个字往下预测
     sentence = sentence[-unit_sentence:]
     for i in range(3):
         sentence = np.append(sentence,char2id_dict[name[i+1]])
@@ -168,6 +173,7 @@ def predict_from_head(epoch,name,x_data,char2id_dict,id2char_dict,model):
             pred = _pred(sentence)
             sentence = np.append(sentence,pred)
 
+    # 保证藏头诗的正确
     output = []
     for i in range(len(sentence)):
         output.append(id2char_dict[sentence[i]])
