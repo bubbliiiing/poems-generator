@@ -3,7 +3,8 @@
 
 # 使用方法
 1、利用poem_keras.py可以训练模型。  
-
+预训练模型可以在百度网盘下载：  
+链接: https://pan.baidu.com/s/19JKH97MnddrXX3qTPIcrwA 提取码: jxk7  
 2、利用predict.py可以进行预测。  
 下面这段代码用于随机生成诗词：  
 predict_from_nothing(0,x_data,char2id_dict,id2char_dict,model)  
